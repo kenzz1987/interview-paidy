@@ -1,6 +1,6 @@
 package forex
 
-import cats.effect.{ Concurrent, Timer }
+import cats.effect.{ Timer, ConcurrentEffect }
 import forex.config.ApplicationConfig
 import forex.http.rates.RatesHttpRoutes
 import forex.services._
@@ -8,10 +8,12 @@ import forex.programs._
 import org.http4s._
 import org.http4s.implicits._
 import org.http4s.server.middleware.{ AutoSlash, Timeout }
+import scala.concurrent.ExecutionContext
 
-class Module[F[_]: Concurrent: Timer](config: ApplicationConfig) {
+class Module[F[_]: Timer: ConcurrentEffect](config: ApplicationConfig) {
+  private implicit val ec: ExecutionContext = ExecutionContext.global
 
-  private val ratesService: RatesService[F] = RatesServices.dummy[F]
+  private val ratesService: forex.services.rates.Algebra[F] = RatesServices.oneFrame[F](ec)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 
