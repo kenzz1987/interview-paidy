@@ -4,7 +4,8 @@ import scala.concurrent.duration.FiniteDuration
 
 case class ApplicationConfig(
     http: HttpConfig,
-    rates: RatesConfig
+    rates: RatesConfig,
+    limiter: LimiterConfig
 )
 
 case class HttpConfig(
@@ -15,4 +16,9 @@ case class HttpConfig(
 
 case class RatesConfig(
     cache: FiniteDuration
+)
+
+case class LimiterConfig(
+    rate: Int,
+    window: FiniteDuration
 )

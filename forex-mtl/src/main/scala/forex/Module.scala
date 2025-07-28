@@ -4,27 +4,33 @@ import cats.effect.{ Timer, ConcurrentEffect }
 import forex.config.ApplicationConfig
 import forex.http.rates.RatesHttpRoutes
 import forex.services._
+import forex.services.rates.Algebra
 import forex.programs._
 import org.http4s._
 import org.http4s.implicits._
 import org.http4s.server.middleware.{ AutoSlash, Timeout }
 import scala.concurrent.ExecutionContext
+import forex.http.limiter.LimitedMiddleware
 
 class Module[F[_]: Timer: ConcurrentEffect](config: ApplicationConfig) {
   private implicit val ec: ExecutionContext = ExecutionContext.global
 
-  private val ratesService: forex.services.rates.Algebra[F] = RatesServices.oneFrame[F](ec, java.time.Duration.ofMillis(config.rates.cache.toMillis))
+  private val cacheDuration = java.time.Duration.ofMillis(config.rates.cache.toMillis)
+
+  private val ratesService: Algebra[F] = RatesServices.oneFrame[F](ec, cacheDuration)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 
   private val ratesHttpRoutes: HttpRoutes[F] = new RatesHttpRoutes[F](ratesProgram).routes
+
+  private val limitedMiddleware = new LimitedMiddleware[F](config.limiter.rate, config.limiter.window)
 
   type PartialMiddleware = HttpRoutes[F] => HttpRoutes[F]
   type TotalMiddleware   = HttpApp[F] => HttpApp[F]
 
   private val routesMiddleware: PartialMiddleware = {
     { http: HttpRoutes[F] =>
-      AutoSlash(http)
+      limitedMiddleware(AutoSlash(http))
     }
   }
 
