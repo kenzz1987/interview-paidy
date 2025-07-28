@@ -1,12 +1,12 @@
 package forex.services.rates
 
 import cats.Applicative
+import cats.effect.ConcurrentEffect
 import interpreters._
+import java.time.Duration
 import scala.concurrent.ExecutionContext
 
 object Interpreters {
   def dummy[F[_]: Applicative]: Algebra[F] = new OneFrameDummy[F]()
-  import cats.effect.ConcurrentEffect
-
-  def oneFrame[F[_]: ConcurrentEffect](ec: ExecutionContext): Algebra[F] = new OneFrameInterpreter[F](ec)
+  def oneFrame[F[_]: ConcurrentEffect](ec: ExecutionContext, cacheDuration: Duration): Algebra[F] = new OneFrameInterpreter[F](ec, cacheDuration)
 }

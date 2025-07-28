@@ -13,7 +13,7 @@ import scala.concurrent.ExecutionContext
 class Module[F[_]: Timer: ConcurrentEffect](config: ApplicationConfig) {
   private implicit val ec: ExecutionContext = ExecutionContext.global
 
-  private val ratesService: forex.services.rates.Algebra[F] = RatesServices.oneFrame[F](ec)
+  private val ratesService: forex.services.rates.Algebra[F] = RatesServices.oneFrame[F](ec, java.time.Duration.ofMillis(config.rates.cache.toMillis))
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 
