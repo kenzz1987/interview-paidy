@@ -15,7 +15,9 @@ case class HttpConfig(
 )
 
 case class RatesConfig(
-    cache: FiniteDuration
+    cache: FiniteDuration,
+    uri: String,
+    token: String
 )
 
 case class LimiterConfig(

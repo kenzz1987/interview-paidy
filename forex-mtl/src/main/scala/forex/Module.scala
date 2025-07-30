@@ -16,8 +16,10 @@ class Module[F[_]: Timer: ConcurrentEffect](config: ApplicationConfig) {
   private implicit val ec: ExecutionContext = ExecutionContext.global
 
   private val cacheDuration = java.time.Duration.ofMillis(config.rates.cache.toMillis)
+  private val apiUri = config.rates.uri
+  private val apiToken = config.rates.token
 
-  private val ratesService: Algebra[F] = RatesServices.oneFrame[F](ec, cacheDuration)
+  private val ratesService: Algebra[F] = RatesServices.oneFrame[F](ec, cacheDuration, apiUri, apiToken)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 

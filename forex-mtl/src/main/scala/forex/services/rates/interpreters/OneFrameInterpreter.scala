@@ -13,47 +13,62 @@ import org.http4s.{Request, Method, Headers, Header}
 import org.typelevel.ci._
 import scala.concurrent.ExecutionContext
 import io.circe.parser.decode
-import io.circe.{Decoder, HCursor}
-import java.time.{Instant, Duration}
+import java.time.{Instant, Duration, OffsetDateTime}
 import scala.collection.immutable.Map
 import cats.effect.concurrent.Ref
+import forex.http.rates.Protocol.RateResponse
+import forex.domain.Currency
 
-case class RateResponse(price: BigDecimal)
-
-object RateResponse {
-  implicit val rateResponseDecoder: Decoder[RateResponse] = (c: HCursor) => for {
-    price <- c.downField("price").as[BigDecimal]
-  } yield RateResponse(price)
-}
-
-class OneFrameInterpreter[F[_]: ConcurrentEffect](ec: ExecutionContext, cacheDuration: Duration) extends Algebra[F] {
+class OneFrameInterpreter[F[_]: ConcurrentEffect](ec: ExecutionContext, 
+                                                  cacheDuration: Duration,
+                                                  apiUri: String,
+                                                  apiToken: String) extends Algebra[F] {
   private val cacheRef: Ref[F, Map[Rate.Pair, (Rate, Instant)]] =
     Ref.unsafe(Map.empty[Rate.Pair, (Rate, Instant)])
   override def get(pair: Rate.Pair): F[Error Either Rate] = {
     if (pair.from == pair.to) {
-      returnSamePairRate(pair)
+      getSamePairRate(pair)
+    } else if (pair.from == Currency.USD || pair.to == Currency.USD) {
+      getRateFromCacheOrApi(pair)
     } else {
-      getFromCacheOrApi(pair)
+      getCrossRateFromCacheOrApi(pair)
     }
   }
 
-  private def returnSamePairRate(pair: Rate.Pair): F[Error Either Rate] = {
+  private def getSamePairRate(pair: Rate.Pair): F[Error Either Rate] = {
     val rate = Rate(pair, Price(BigDecimal(1)), Timestamp.now)
     ConcurrentEffect[F].pure(rate.asRight[Error])
   }
 
-  private def getFromCacheOrApi(pair: Rate.Pair): F[Error Either Rate] = {
+  private def getCrossRateFromCacheOrApi(pair: Rate.Pair): F[Error Either Rate] = {
+    val pair1 = Rate.Pair(pair.from, Currency.USD)
+    val pair2 = Rate.Pair(Currency.USD, pair.to)
+    for {
+      rate1 <- getRateFromCacheOrApi(pair1)
+      rate2 <- getRateFromCacheOrApi(pair2)
+    } yield {
+      (rate1, rate2) match {
+        case (Right(r1), Right(r2)) =>
+          val price = Price(r1.price.value * r2.price.value)
+          val timestamp = if (r1.timestamp.value.isAfter(r2.timestamp.value)) r1.timestamp else r2.timestamp
+          Rate(pair, price, timestamp).asRight[Error]
+        case (Left(error), _) => error.asLeft[Rate]
+        case (_, Left(error)) => error.asLeft[Rate]
+      }
+    }
+  }
+
+  private def getRateFromCacheOrApi(pair: Rate.Pair): F[Error Either Rate] = {
     ConcurrentEffect[F].delay(Instant.now()).flatMap { now =>
         cacheRef.get.flatMap { cache =>
             cache.get(pair) match {
               case Some((rate, timestamp)) if Duration.between(timestamp, now).compareTo(cacheDuration) < 0 =>
-                  val updatedRate = rate.copy(timestamp = Timestamp.now)
-                  ConcurrentEffect[F].pure(updatedRate.asRight[Error])
+                ConcurrentEffect[F].pure(rate.asRight[Error])
               case _ =>
-                  fetchRateFromOneFrame(pair).flatMap {
-                    case Right(rate) => updateCache(pair, rate).as(rate.asRight[Error])
-                    case Left(error) => ConcurrentEffect[F].pure(error.asLeft[Rate])
-                  }
+                fetchRateFromOneFrame(pair).flatMap {
+                  case Right(rate) => updateCache(pair, rate).as(rate.asRight[Error])
+                  case Left(error) => ConcurrentEffect[F].pure(error.asLeft[Rate])
+                }
             }
         }
     }
@@ -64,14 +79,14 @@ class OneFrameInterpreter[F[_]: ConcurrentEffect](ec: ExecutionContext, cacheDur
   }
 
   private def fetchRateFromOneFrame(pair: Rate.Pair): F[Error Either Rate] = {
-    val request = getRequest(pair)
+    val request = getRequest
     callOneFrameApi(request, pair)
   }
 
-  private def getRequest(pair: Rate.Pair): Request[F] = {
-    val pairStr = s"${pair.from}${pair.to}"
-    val uri = Uri.unsafeFromString(s"http://localhost:8080/rates?pair=$pairStr")
-    val tokenHeader = Header.Raw(ci"token", "10dc303535874aeccc86a8251e6992f5")
+  private def getRequest: Request[F] = {
+    val pairStr = Currency.proxyPairsQueryString
+    val uri = Uri.unsafeFromString(s"$apiUri/rates?pair=$pairStr")
+    val tokenHeader = Header.Raw(ci"token", apiToken)
     Request[F](
       method = Method.GET,
       uri = uri,
@@ -92,7 +107,7 @@ class OneFrameInterpreter[F[_]: ConcurrentEffect](ec: ExecutionContext, cacheDur
       case Right(rateList) if rateList.nonEmpty =>
         val r = rateList.head
         val price = Price(r.price)
-        val timestamp = Timestamp.now
+        val timestamp = Timestamp(OffsetDateTime.parse(r.time_stamp))
         Rate(pair, price, timestamp)
       case _ =>
         Rate(pair, Price(BigDecimal(0)), Timestamp.now) 
