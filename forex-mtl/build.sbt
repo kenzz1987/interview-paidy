@@ -68,3 +68,9 @@ libraryDependencies ++= Seq(
   Libraries.scalaCheck     % Test,
   Libraries.catsScalaCheck % Test
 )
+
+enablePlugins(JavaAppPackaging, DockerPlugin)
+
+dockerBaseImage := "openjdk:17-slim"
+dockerExposedPorts := Seq(8081)
+maintainer := "Kendy Yomarno <kenzz1987@gmail.com>"
