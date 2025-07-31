@@ -1,5 +1,3 @@
-<img src="/paidy.png?raw=true" width=300 style="background-color:white;">
-
 # Candidate : Kendy Yomarno
 
 ## Notes
@@ -15,3 +13,19 @@
   - finally, implement rate limiter for 10,000 request (optional only when the successful return rates from oneframe service is lower than 80%)
   - when supplied with same currency pair (e.g USD to USD), return 1 immediately
   - cache in combination, not permutation (there will be only one record in the cache for USD x JPY e.g USDJPY), if the request is JPY to USD, just reverse the rate -- 1 / USDJPY_rate
+
+## Development
+- docker run OneFrame API & run forex-mtl using Scala Metals extension in VS Code
+- test connectivity to OneFrame API from forex-mtl
+- setup config to host the application
+- add dependency for http4s-blaze-client
+- redirect API calls to OneFrame API first
+- add caching for single pair (redirect API calls to OneFrame API when cache miss), add config for cache duration of 2 minutes
+- apply rate limiter to ensure maximum of 10,000 calls a day
+- extends currency pool based on supported currencies in OneFrame API
+- test connectivity to OneFrame API using combinations of all supported currencies (failed, querystring is too long -- nearly 10k pairs in total)
+- workaround using proxy currency (USD) to handle too many combinations
+- adjust cache hit using proxy currency when needed
+- add validations to ensure only accepting GET requests with supported currencies
+- move decoder to Protocol.scala since it seems more suitable there
+- move API token and URL to config
