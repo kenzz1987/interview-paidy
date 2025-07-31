@@ -29,3 +29,31 @@
 - add validations to ensure only accepting GET requests with supported currencies
 - move decoder to Protocol.scala since it seems more suitable there
 - move API token and URL to config
+
+## Usage
+### Pre-requisites
+- OneFrame API is running locally in localhost port 8080 as guided in Forex.md
+- Pull the forex app image with `docker pull kenzz1987/forex`
+- Run the service locally on port 8081 with `docker run -p 8081:8081 kenzz1987/forex`
+- If the everything doesn't go well until this point, please either :
+  - consider to drop my application
+  - or consider to give me another chance by runing the codes from any working IDE
+### API access
+Only one entry point `GET /rates` with strictly enforced query param `from` and `to`. Example cURL request :
+```
+curl http://0.0.0.0:8081/rates?from=USD&to=JPY
+{"from":"USD","to":"JPY","price":0.71810472617368925,"timestamp":"2025-07-31T16:16:45.499Z"}
+```
+or
+```
+curl http://localhost:8081/rates?from=USD&to=JPY
+{"from":"USD","to":"JPY","price":0.71810472617368925,"timestamp":"2025-07-31T16:16:45.499Z"}
+```
+### Limitation
+- 10,000 request per day
+- same pair conversion will directly return 1
+- rates are using USD as proxy, means it will be slightly different with direct conversion after 5-6 positions behind decimal separator at worst, no difference at best
+- expiry of the cache is 2 minutes
+- not supporting currencies that are not supported by OneFrame API
+### Notes
+If there's any questions, feedbacks, suggestions or compliments, please reach out to me at kenzz1987@gmail.com. Your feedbacks are very much valuable for my improvement
